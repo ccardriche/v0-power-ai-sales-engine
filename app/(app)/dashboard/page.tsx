@@ -3,7 +3,7 @@ import { KpiTile } from '@/components/kpi-tile'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { Users, GitBranch, CheckSquare, TrendingUp, Calendar, Star } from 'lucide-react'
+import { Users, GitBranch, CheckSquare, TrendingUp, Calendar, Star, Bot } from 'lucide-react'
 import Link from 'next/link'
 import { formatDistanceToNow } from 'date-fns'
 
@@ -93,6 +93,36 @@ async function getTopThemes(supabase: Awaited<ReturnType<typeof createClient>>, 
   return data ?? []
 }
 
+async function getAgentStatus(supabase: Awaited<ReturnType<typeof createClient>>) {
+  const agents = [
+    'social-generate',
+    'social-schedule', 
+    'cold-email',
+    'sms',
+    'linkedin',
+    'ads',
+    'crm-memory',
+    'analytics',
+    'approval-reminders',
+  ]
+  
+  const results: { agent: string; action: string | null; message: string | null; level: string | null; created_at: string | null; dry_run: boolean | null }[] = []
+  
+  for (const agent of agents) {
+    const { data } = await supabase
+      .from('agent_logs')
+      .select('agent, action, message, level, created_at, dry_run')
+      .eq('agent', agent)
+      .order('created_at', { ascending: false })
+      .limit(1)
+    
+    const row = data?.[0]
+    results.push(row ?? { agent, action: null, message: null, level: null, created_at: null, dry_run: null })
+  }
+  
+  return results
+}
+
 export default async function DashboardPage() {
   const supabase = await createClient()
   const companyId = await getCompanyId(supabase)
@@ -118,6 +148,7 @@ export default async function DashboardPage() {
     recentActivity,
     approvedContentCount,
     topThemes,
+    agentStatus,
   ] = await Promise.all([
     getLeadsThisWeek(supabase, companyId),
     getActiveEnrollments(supabase, companyId),
@@ -126,6 +157,7 @@ export default async function DashboardPage() {
     getRecentActivity(supabase, companyId),
     getApprovedContentCount(supabase, companyId),
     getTopThemes(supabase, companyId),
+    getAgentStatus(supabase),
   ])
 
   return (
@@ -268,6 +300,57 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Agent Status Panel */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Bot className="w-5 h-5 text-brand-teal" />
+            Agent Status
+          </CardTitle>
+          <Link 
+            href="/settings" 
+            className="text-sm text-brand-teal hover:text-brand-teal/80 font-medium"
+          >
+            Manage agents →
+          </Link>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {agentStatus.map((status) => (
+              <div 
+                key={status.agent}
+                className="p-3 rounded-lg border bg-card"
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm font-medium">{status.agent}</span>
+                  {status.level && (
+                    <Badge 
+                      variant={status.level === 'error' ? 'destructive' : status.level === 'warn' ? 'outline' : 'secondary'}
+                      className={status.level === 'warn' ? 'text-brand-gold border-brand-gold' : ''}
+                    >
+                      {status.level}
+                    </Badge>
+                  )}
+                </div>
+                {status.created_at ? (
+                  <>
+                    <p className="text-xs text-muted-foreground truncate" title={status.message ?? ''}>
+                      {status.message ?? status.action}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {formatDistanceToNow(new Date(status.created_at), { addSuffix: true })}
+                      {status.dry_run && <span className="ml-1 text-brand-gold">(dry run)</span>}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Never run</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }
