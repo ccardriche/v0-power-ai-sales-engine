@@ -1,154 +1,251 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
+import { generateJSON } from '@/lib/anthropic'
 
-interface ProductService {
+// Get authenticated user's company
+async function getCompany() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  const { data: company } = await supabase
+    .from('companies')
+    .select('*')
+    .eq('id', user.id)
+    .single()
+
+  return company
+}
+
+// Step 1: Save company identity
+export async function saveCompanyStep(data: {
+  name: string
+  website?: string
+  offer?: string
+  primary_sales_goal?: string
+}) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  const { error } = await supabase
+    .from('companies')
+    .update({
+      name: data.name,
+      website: data.website || null,
+      offer: data.offer || null,
+      primary_sales_goal: data.primary_sales_goal || null,
+      onboarding_step: 'icp',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', user.id)
+
+  if (error) throw error
+  revalidatePath('/onboarding')
+  redirect('/onboarding/icp')
+}
+
+// Step 2: Save ICP and segments
+interface SegmentData {
   name: string
   description: string
-  price_range: string
-  target_audience: string
+  icp_criteria?: Record<string, unknown>
 }
 
-interface Competitor {
-  name: string
-  website: string
-  differentiator: string
-}
-
-interface ObjectionResponse {
-  objection: string
-  response: string
-}
-
-interface OnboardingData {
-  // Company
-  name: string
-  website: string
-  industry: string
-  company_size: string
-  founding_year: string
-  location: string
-  timezone: string
-  logo_url: string
-  // Products & Services
-  offer: string
-  products_services: ProductService[]
-  pricing_model: string
-  average_deal_size: string
-  sales_cycle_length: string
-  // Customer
+export async function saveICPStep(data: {
   target_customer: string
   icp_description: string
-  primary_sales_goal: string
-  pain_points_solved: string[]
-  // Competitors
-  competitors: Competitor[]
-  unique_differentiators: string[]
-  // Voice
+  segments: SegmentData[]
+}) {
+  const company = await getCompany()
+  const supabase = await createClient()
+
+  // Save ICP info
+  const { error: updateError } = await supabase
+    .from('companies')
+    .update({
+      target_customer: data.target_customer,
+      icp_description: data.icp_description,
+      onboarding_step: 'voice',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', company.id)
+
+  if (updateError) throw updateError
+
+  // Upsert segments
+  for (const segment of data.segments) {
+    const { error: segmentError } = await supabase
+      .from('segments')
+      .upsert({
+        company_id: company.id,
+        name: segment.name,
+        description: segment.description,
+        icp_criteria: segment.icp_criteria || {},
+        status: 'active',
+        source: 'ai-suggested',
+      }, {
+        onConflict: 'company_id,name',
+      })
+
+    if (segmentError) throw segmentError
+  }
+
+  revalidatePath('/onboarding')
+  redirect('/onboarding/voice')
+}
+
+// Suggest segments using AI
+export async function suggestSegments(data: {
+  target_customer: string
+  icp_description: string
+}) {
+  const company = await getCompany()
+
+  const systemPrompt = `You are a business strategist. Given a company's offer, target customer, and ICP, propose exactly 5 distinct ICP sub-segments. Each should be specific and actionable.`
+
+  const userPrompt = `Company offer: ${company.offer}
+Target customer: ${data.target_customer}
+ICP Description: ${data.icp_description}
+
+Return ONLY valid JSON in this format:
+{
+  "segments": [
+    {
+      "name": "Segment name",
+      "description": "2-3 sentence description",
+      "icp_criteria": {
+        "org_type": "e.g., nonprofit",
+        "title_includes": "e.g., CFO",
+        "size": "1-50",
+        "geography": "e.g., US East",
+        "mission_keywords": "e.g., education, impact"
+      }
+    }
+  ]
+}
+`
+
+  const result = await generateJSON({
+    system: systemPrompt,
+    user: userPrompt,
+    maxTokens: 1500,
+  })
+
+  return result.segments || []
+}
+
+// Step 3: Save brand voice
+export async function saveVoiceStep(data: {
   brand_voice: string
   approved_ctas: string[]
   case_studies: string
-  content_themes: string[]
-  // Objections
-  objection_handling: ObjectionResponse[]
-  // Channels
-  communication_channels: string[]
-  social_linkedin: string
-  social_twitter: string
-  social_facebook: string
-  social_instagram: string
-  social_youtube: string
-  email_signature: string
-  meeting_link: string
-  // Compliance
+}) {
+  const company = await getCompany()
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .from('companies')
+    .update({
+      brand_voice: data.brand_voice,
+      approved_ctas: data.approved_ctas,
+      case_studies: data.case_studies || null,
+      onboarding_step: 'compliance',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', company.id)
+
+  if (error) throw error
+  revalidatePath('/onboarding')
+  redirect('/onboarding/compliance')
+}
+
+// Step 4: Save compliance settings
+export async function saveComplianceStep(data: {
   unsubscribe_url: string
   physical_address: string
   quiet_hours_start: string
   quiet_hours_end: string
-  default_opt_in_source: string
-}
-
-export async function saveOnboarding(data: OnboardingData) {
+  default_opt_in_source?: string
+  default_sender_name?: string
+  default_reply_email?: string
+}) {
+  const company = await getCompany()
   const supabase = await createClient()
 
-  // First, check if the company exists
-  const { data: existingCompany } = await supabase
+  const { error } = await supabase
     .from('companies')
-    .select('id')
-    .eq('name', 'Power AI Funds')
-    .single()
+    .update({
+      compliance_config: {
+        unsubscribe_url: data.unsubscribe_url,
+        physical_address: data.physical_address,
+        quiet_hours_start: data.quiet_hours_start,
+        quiet_hours_end: data.quiet_hours_end,
+        default_opt_in_source: data.default_opt_in_source || null,
+        default_sender_name: data.default_sender_name || null,
+        default_reply_email: data.default_reply_email || null,
+      },
+      onboarding_step: 'agents',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', company.id)
 
-  const companyData = {
-    name: data.name || 'Power AI Funds',
-    website: data.website || null,
-    industry: data.industry || null,
-    company_size: data.company_size || null,
-    founding_year: data.founding_year ? parseInt(data.founding_year) : null,
-    location: data.location || null,
-    timezone: data.timezone || 'America/New_York',
-    logo_url: data.logo_url || null,
-    offer: data.offer || null,
-    products_services: data.products_services.filter(p => p.name),
-    pricing_model: data.pricing_model || null,
-    average_deal_size: data.average_deal_size || null,
-    sales_cycle_length: data.sales_cycle_length || null,
-    target_customer: data.target_customer || null,
-    icp_description: data.icp_description || null,
-    primary_sales_goal: data.primary_sales_goal || null,
-    pain_points_solved: data.pain_points_solved,
-    competitors: data.competitors.filter(c => c.name),
-    unique_differentiators: data.unique_differentiators,
-    brand_voice: data.brand_voice || null,
-    approved_ctas: data.approved_ctas,
-    case_studies: data.case_studies || null,
-    content_themes: data.content_themes,
-    objection_handling: data.objection_handling.filter(o => o.objection),
-    communication_channels: data.communication_channels,
-    social_profiles: {
-      linkedin: data.social_linkedin || null,
-      twitter: data.social_twitter || null,
-      facebook: data.social_facebook || null,
-      instagram: data.social_instagram || null,
-      youtube: data.social_youtube || null,
-    },
-    email_signature: data.email_signature || null,
-    meeting_link: data.meeting_link || null,
-    compliance_config: {
-      unsubscribe_url: data.unsubscribe_url || null,
-      physical_address: data.physical_address || null,
-      quiet_hours_start: data.quiet_hours_start || '08:00',
-      quiet_hours_end: data.quiet_hours_end || '21:00',
-      default_opt_in_source: data.default_opt_in_source || null,
-    },
-    updated_at: new Date().toISOString(),
+  if (error) throw error
+  revalidatePath('/onboarding')
+  redirect('/onboarding/agents')
+}
+
+// Fetch agent configurations for the user's company
+export async function fetchAgentConfigurations() {
+  const company = await getCompany()
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from('agent_configurations')
+    .select('*')
+    .eq('company_id', company.id)
+
+  if (error) throw error
+  return data || []
+}
+
+// Step 5: Finish onboarding with agent settings
+interface AgentConfig {
+  agent_name: string
+  enabled: boolean
+}
+
+export async function finishOnboarding(agents: AgentConfig[]) {
+  const company = await getCompany()
+  const supabase = await createClient()
+
+  // Update all agent configurations
+  for (const agent of agents) {
+    const { error } = await supabase
+      .from('agent_configurations')
+      .update({ enabled: agent.enabled })
+      .eq('company_id', company.id)
+      .eq('agent_name', agent.agent_name)
+
+    if (error) throw error
   }
 
-  let error
+  // Mark onboarding as complete
+  const { error: updateError } = await supabase
+    .from('companies')
+    .update({
+      onboarding_completed: true,
+      onboarding_completed_at: new Date().toISOString(),
+      onboarding_step: 'done',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', company.id)
 
-  if (existingCompany) {
-    // Update existing company
-    const result = await supabase
-      .from('companies')
-      .update(companyData)
-      .eq('id', existingCompany.id)
-    error = result.error
-  } else {
-    // Insert new company (for new users)
-    const result = await supabase
-      .from('companies')
-      .insert({
-        ...companyData,
-        id: '00000000-0000-0000-0000-000000000001', // Use fixed ID for now
-      })
-    error = result.error
-  }
-
-  if (error) {
-    console.error('Error saving onboarding data:', error)
-    return { success: false, error: error.message }
-  }
+  if (updateError) throw updateError
 
   revalidatePath('/dashboard')
-  return { success: true }
+  redirect('/dashboard')
 }
