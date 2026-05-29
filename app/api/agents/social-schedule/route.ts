@@ -12,8 +12,8 @@ export async function GET(req: Request) {
     const unauth = verifyCron(req)
     if (unauth) return unauth
   } else {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const userSupabase = await createClient()
+    const { data: { user } } = await userSupabase.auth.getUser()
     if (!user) return new Response('Unauthorized', { status: 401 })
   }
 
@@ -52,6 +52,7 @@ export async function GET(req: Request) {
   }
 
   let actions = 0
+  let errors = 0
   let liveMode = false
 
   // Check if we can actually send to Buffer
@@ -63,25 +64,32 @@ export async function GET(req: Request) {
   }
 
   for (const post of posts) {
-    if (liveMode) {
-      // TODO: Call Buffer GraphQL API when BUFFER_LIVE=true
-      // For now, mark as scheduled
-      await supabase
-        .from('social_posts')
-        .update({ buffer_status: 'scheduled' })
-        .eq('id', post.id)
-    } else {
-      // Simulation mode - mark as queued
-      await supabase
-        .from('social_posts')
-        .update({ buffer_status: 'queued' })
-        .eq('id', post.id)
+    try {
+      if (liveMode) {
+        // TODO: Call Buffer GraphQL API when BUFFER_LIVE=true
+        // For now, mark as scheduled
+        await supabase
+          .from('social_posts')
+          .update({ buffer_status: 'scheduled' })
+          .eq('id', post.id)
+      } else {
+        // Simulation mode - mark as queued
+        await supabase
+          .from('social_posts')
+          .update({ buffer_status: 'queued' })
+          .eq('id', post.id)
+      }
+      actions++
+    } catch (err) {
+      errors++
+      await logAgent(AGENT_NAME, 'error', 'row_error', `Failed to schedule post ${post.id}`, { 
+        postId: post.id, 
+        error: err instanceof Error ? err.message : String(err) 
+      })
     }
-
-    actions++
   }
 
   const mode = liveMode ? 'live' : 'simulated'
-  await logAgent(AGENT_NAME, 'info', 'run', `Scheduled ${actions} posts (${mode}).`, { actions, mode })
-  return NextResponse.json({ ok: true, actions, mode })
+  await logAgent(AGENT_NAME, 'info', 'run', `Scheduled ${actions} posts (${mode}). Errors: ${errors}`, { actions, errors, mode })
+  return NextResponse.json({ ok: true, actions, errors, mode })
 }

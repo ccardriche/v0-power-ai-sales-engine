@@ -13,8 +13,8 @@ export async function GET(req: Request) {
     const unauth = verifyCron(req)
     if (unauth) return unauth
   } else {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const userSupabase = await createClient()
+    const { data: { user } } = await userSupabase.auth.getUser()
     if (!user) return new Response('Unauthorized', { status: 401 })
   }
 
