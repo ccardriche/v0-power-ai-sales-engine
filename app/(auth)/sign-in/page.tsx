@@ -12,8 +12,29 @@ import Link from 'next/link'
 export default function SignInPage() {
   const [email, setEmail] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [isDemoLoading, setIsDemoLoading] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const handleDemoLogin = async () => {
+    setIsDemoLoading(true)
+    setError(null)
+
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.auth.signInWithPassword({
+        email: 'demo@powerai.dev',
+        password: 'demo1234',
+      })
+
+      if (error) throw error
+      window.location.href = '/dashboard'
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Demo login failed. Please try again.')
+    } finally {
+      setIsDemoLoading(false)
+    }
+  }
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -95,9 +116,28 @@ export default function SignInPage() {
                 <Button 
                   type="submit" 
                   className="w-full bg-brand-teal hover:bg-brand-teal/90 text-white"
-                  disabled={isLoading}
+                  disabled={isLoading || isDemoLoading}
                 >
                   {isLoading ? 'Sending...' : 'Send magic link'}
+                </Button>
+
+                <div className="relative my-4">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-card px-2 text-muted-foreground">Or</span>
+                  </div>
+                </div>
+
+                <Button 
+                  type="button"
+                  variant="outline"
+                  className="w-full border-brand-navy text-brand-navy hover:bg-brand-navy hover:text-white"
+                  disabled={isLoading || isDemoLoading}
+                  onClick={handleDemoLogin}
+                >
+                  {isDemoLoading ? 'Signing in...' : 'Try Demo Account'}
                 </Button>
               </form>
             ) : (
