@@ -43,8 +43,24 @@ export interface SequenceEnrollment {
 export interface Approval {
   id: string
   company_id: string
+  entity_type: 'campaign' | 'sequence' | 'outreach_message' | 'social_post'
+  entity_id: string
   status: 'pending_approval' | 'approved' | 'rejected'
-  content: string | null
+  reviewer_notes: string | null
+  created_at: string
+  reviewed_at: string | null
+}
+
+export interface OutreachMessage {
+  id: string
+  company_id: string
+  sequence_step_id: string | null
+  lead_id: string | null
+  channel: string
+  subject: string | null
+  body: string | null
+  status: 'draft' | 'pending' | 'sent' | 'delivered' | 'failed'
+  sent_at: string | null
   created_at: string
 }
 
