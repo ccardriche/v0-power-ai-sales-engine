@@ -38,10 +38,13 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, reason: 'no_company' })
   }
 
-  // Get SMS-opted leads without sequence
+  // Get SMS-opted leads with contact via FK
   const { data: leads } = await supabase
     .from('leads')
-    .select('*, contacts(*)')
+    .select(`
+      *,
+      contacts:contact_id ( first_name, last_name, job_title, organization, phone )
+    `)
     .eq('company_id', company.id)
     .eq('sms_opt_in', true)
     .eq('sequence_status', 'none')
@@ -54,12 +57,14 @@ export async function GET(req: Request) {
 
   const system = buildSystemPrompt(company)
   let actions = 0
+  const errors: string[] = []
 
   for (const lead of leads) {
-    const contact = lead.contacts
-    if (!contact?.phone) continue
+    try {
+      const contact = lead.contacts as { first_name: string | null; last_name: string | null; job_title: string | null; organization: string | null; phone: string | null } | null
+      if (!contact?.phone) continue
 
-    const user = `Write an SMS message for this lead:
+      const userPrompt = `Write an SMS message for this lead:
 Name: ${contact.first_name ?? ''}
 Title: ${contact.job_title ?? 'founder'}
 Company: ${contact.organization ?? ''}
@@ -71,35 +76,31 @@ Requirements:
 
 Return ONLY JSON with keys: message (the SMS text, max 135 chars to leave room for opt-out).`
 
-    const g = await generateJSON({ system, user })
-    
-    // Enforce opt-out compliance
-    const baseMessage = ((g.message as string) ?? '').slice(0, 135)
-    const fullMessage = `${baseMessage} Reply STOP to opt out`
+      const g = await generateJSON({ system, user: userPrompt })
+      
+      // Enforce opt-out compliance
+      const baseMessage = ((g.message as string) ?? '').slice(0, 135)
+      const fullMessage = `${baseMessage} Reply STOP to opt out`
 
-    // Insert outreach message
-    const { data: message } = await supabase
-      .from('outreach_messages')
-      .insert({
-        company_id: company.id,
-        lead_id: lead.id,
-        channel: 'sms',
-        body: fullMessage,
-        status: 'draft',
-        approval_status: 'pending_approval',
-      })
-      .select()
-      .single()
+      // Insert outreach message
+      const { data: message, error: insertErr } = await supabase
+        .from('outreach_messages')
+        .insert({
+          company_id: company.id,
+          lead_id: lead.id,
+          channel: 'sms',
+          body: fullMessage,
+          status: 'draft',
+          approval_status: 'pending_approval',
+        })
+        .select()
+        .single()
 
-    // Update lead status
-    await supabase
-      .from('leads')
-      .update({ sequence_status: 'queued' })
-      .eq('id', lead.id)
+      if (insertErr) throw insertErr
+      if (!message) throw new Error('No message returned')
 
-    // Create approval record
-    if (message) {
-      await supabase.from('approvals').insert({
+      // Create approval record
+      const { error: apprErr } = await supabase.from('approvals').insert({
         company_id: company.id,
         channel: 'sms',
         entity_type: 'outreach_message',
@@ -110,11 +111,22 @@ Return ONLY JSON with keys: message (the SMS text, max 135 chars to leave room f
         requested_by: AGENT_NAME,
         source: AGENT_NAME,
       })
-    }
+      if (apprErr) throw apprErr
 
-    actions++
+      // Update lead status
+      await supabase
+        .from('leads')
+        .update({ sequence_status: 'queued' })
+        .eq('id', lead.id)
+
+      actions++
+    } catch (e) {
+      const msg = (e as Error).message
+      errors.push(`lead ${lead.id}: ${msg}`)
+      await logAgent(AGENT_NAME, 'error', 'row_failed', `Lead ${lead.id} failed: ${msg}`)
+    }
   }
 
-  await logAgent(AGENT_NAME, 'info', 'run', `Drafted ${actions} SMS messages.`, { actions })
-  return NextResponse.json({ ok: true, actions })
+  await logAgent(AGENT_NAME, errors.length ? 'warn' : 'info', 'run', `Drafted ${actions} SMS messages (errors: ${errors.length})`, { actions, errors: errors.length })
+  return NextResponse.json({ ok: errors.length === 0, actions, errors: errors.length })
 }

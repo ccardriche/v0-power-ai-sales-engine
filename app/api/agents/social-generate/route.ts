@@ -53,9 +53,11 @@ export async function GET(req: Request) {
 
   const system = buildSystemPrompt(company)
   let actions = 0
+  const errors: string[] = []
 
   for (const row of rows) {
-    const user = `Create one social post.
+    try {
+      const userPrompt = `Create one social post.
 Week: ${row.week ?? 'N/A'} Day: ${row.day ?? 'N/A'}
 Platform: ${row.platform ?? 'linkedin'}
 Theme: ${row.content_theme ?? row.title ?? 'general'}
@@ -65,46 +67,42 @@ Preferred CTA: ${row.cta ?? ''}
 Seed copy: ${row.source_copy ?? ''}
 Return ONLY JSON with keys: hook, caption, image_prompt, video_prompt, cta, hashtags (array of 5), rationale.`
 
-    const g = await generateJSON({ system, user })
-    
-    const tags = Array.isArray(g.hashtags) ? (g.hashtags as string[]).join(' ') : ''
-    const caption = ((g.caption as string) ?? '') + (tags ? `\n\n${tags}` : '')
+      const g = await generateJSON({ system, user: userPrompt })
+      
+      const tags = Array.isArray(g.hashtags) ? (g.hashtags as string[]).join(' ') : ''
+      const captionText = ((g.caption as string) ?? '') + (tags ? `\n\n${tags}` : '')
 
-    // Insert social post
-    const { data: post } = await supabase
-      .from('social_posts')
-      .insert({
-        company_id: company.id,
-        calendar_id: row.id,
-        platform: row.platform ?? 'linkedin',
-        week: row.week,
-        day: row.day,
-        content_theme: row.content_theme ?? row.title,
-        post_goal: row.post_goal,
-        audience: row.audience,
-        hook: (g.hook as string) ?? '',
-        content: caption,
-        image_prompt: (g.image_prompt as string) ?? '',
-        video_prompt: (g.video_prompt as string) ?? '',
-        cta: (g.cta as string) ?? row.cta ?? '',
-        rationale: (g.rationale as string) ?? '',
-        approval_status: 'pending_approval',
-        buffer_status: 'not_scheduled',
-        status: 'draft',
-        source: AGENT_NAME,
-      })
-      .select()
-      .single()
+      // Insert social post (content column, not caption)
+      const { data: post, error: insertErr } = await supabase
+        .from('social_posts')
+        .insert({
+          company_id: company.id,
+          calendar_id: row.id,
+          platform: row.platform ?? 'linkedin',
+          week: row.week,
+          day: row.day,
+          content_theme: row.content_theme ?? row.title,
+          post_goal: row.post_goal,
+          audience: row.audience,
+          hook: (g.hook as string) ?? '',
+          content: captionText,
+          image_prompt: (g.image_prompt as string) ?? '',
+          video_prompt: (g.video_prompt as string) ?? '',
+          cta: (g.cta as string) ?? row.cta ?? '',
+          rationale: (g.rationale as string) ?? '',
+          approval_status: 'pending_approval',
+          buffer_status: 'not_scheduled',
+          status: 'draft',
+          source: AGENT_NAME,
+        })
+        .select()
+        .single()
 
-    // Update calendar item
-    await supabase
-      .from('content_calendar')
-      .update({ status: 'pending_approval', approval_status: 'pending_approval' })
-      .eq('id', row.id)
+      if (insertErr) throw insertErr
+      if (!post) throw new Error('No post returned')
 
-    // Create approval record
-    if (post) {
-      await supabase.from('approvals').insert({
+      // Create approval record
+      const { error: apprErr } = await supabase.from('approvals').insert({
         company_id: company.id,
         channel: 'social',
         entity_type: 'social_post',
@@ -115,11 +113,22 @@ Return ONLY JSON with keys: hook, caption, image_prompt, video_prompt, cta, hash
         requested_by: AGENT_NAME,
         source: AGENT_NAME,
       })
-    }
+      if (apprErr) throw apprErr
 
-    actions++
+      // Update calendar item
+      await supabase
+        .from('content_calendar')
+        .update({ status: 'pending_approval', approval_status: 'pending_approval' })
+        .eq('id', row.id)
+
+      actions++
+    } catch (e) {
+      const msg = (e as Error).message
+      errors.push(`row ${row.id}: ${msg}`)
+      await logAgent(AGENT_NAME, 'error', 'row_failed', `Row ${row.id} failed: ${msg}`)
+    }
   }
 
-  await logAgent(AGENT_NAME, 'info', 'run', `Drafted ${actions} posts.`, { actions })
-  return NextResponse.json({ ok: true, actions })
+  await logAgent(AGENT_NAME, errors.length ? 'warn' : 'info', 'run', `Drafted ${actions} (errors: ${errors.length})`, { actions, errors: errors.length })
+  return NextResponse.json({ ok: errors.length === 0, actions, errors: errors.length })
 }

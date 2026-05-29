@@ -12,8 +12,8 @@ export async function GET(req: Request) {
     const unauth = verifyCron(req)
     if (unauth) return unauth
   } else {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const userSupabase = await createClient()
+    const { data: { user } } = await userSupabase.auth.getUser()
     if (!user) return new Response('Unauthorized', { status: 401 })
   }
 
@@ -75,47 +75,65 @@ export async function GET(req: Request) {
   }
 
   let actions = 0
+  let errors = 0
 
   // Write theme rollups
   for (const [theme, data] of Object.entries(themeRollups)) {
-    // Upsert by deleting existing and inserting new
-    await supabase
-      .from('performance_metrics')
-      .delete()
-      .eq('company_id', company.id)
-      .eq('metric', `rollup_theme:${theme}`)
+    try {
+      // Upsert by deleting existing and inserting new
+      await supabase
+        .from('performance_metrics')
+        .delete()
+        .eq('company_id', company.id)
+        .eq('metric', `rollup_theme:${theme}`)
 
-    await supabase.from('performance_metrics').insert({
-      company_id: company.id,
-      metric: `rollup_theme:${theme}`,
-      scope: `rollup_theme:${theme}`,
-      impressions: data.impressions,
-      engagements: data.engagements,
-    })
-    actions++
+      await supabase.from('performance_metrics').insert({
+        company_id: company.id,
+        metric: `rollup_theme:${theme}`,
+        scope: `rollup_theme:${theme}`,
+        impressions: data.impressions,
+        engagements: data.engagements,
+      })
+      actions++
+    } catch (err) {
+      errors++
+      await logAgent(AGENT_NAME, 'error', 'row_error', `Failed to write theme rollup: ${theme}`, { 
+        theme, 
+        error: err instanceof Error ? err.message : String(err) 
+      })
+    }
   }
 
   // Write CTA rollups
   for (const [cta, data] of Object.entries(ctaRollups)) {
-    await supabase
-      .from('performance_metrics')
-      .delete()
-      .eq('company_id', company.id)
-      .eq('metric', `rollup_cta:${cta}`)
+    try {
+      await supabase
+        .from('performance_metrics')
+        .delete()
+        .eq('company_id', company.id)
+        .eq('metric', `rollup_cta:${cta}`)
 
-    await supabase.from('performance_metrics').insert({
-      company_id: company.id,
-      metric: `rollup_cta:${cta}`,
-      scope: `rollup_cta:${cta}`,
-      impressions: data.impressions,
-      engagements: data.engagements,
-    })
-    actions++
+      await supabase.from('performance_metrics').insert({
+        company_id: company.id,
+        metric: `rollup_cta:${cta}`,
+        scope: `rollup_cta:${cta}`,
+        impressions: data.impressions,
+        engagements: data.engagements,
+      })
+      actions++
+    } catch (err) {
+      errors++
+      await logAgent(AGENT_NAME, 'error', 'row_error', `Failed to write CTA rollup: ${cta}`, { 
+        cta, 
+        error: err instanceof Error ? err.message : String(err) 
+      })
+    }
   }
 
-  await logAgent(AGENT_NAME, 'info', 'run', `Updated ${actions} performance rollups.`, { 
+  await logAgent(AGENT_NAME, 'info', 'run', `Updated ${actions} performance rollups. Errors: ${errors}`, { 
     themes: Object.keys(themeRollups).length,
     ctas: Object.keys(ctaRollups).length,
+    errors,
   })
-  return NextResponse.json({ ok: true, actions })
+  return NextResponse.json({ ok: true, actions, errors })
 }

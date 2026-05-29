@@ -4,88 +4,98 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: #f6f8fa;
-  --foreground: #16222e;
+  /* Refined color palette for premium B2B SaaS feel */
+  --background: #f8fafc;
+  --foreground: #0f172a;
   --card: #ffffff;
-  --card-foreground: #16222e;
+  --card-foreground: #0f172a;
   --popover: #ffffff;
-  --popover-foreground: #16222e;
+  --popover-foreground: #0f172a;
   --primary: #0f2a43;
   --primary-foreground: #ffffff;
-  --secondary: #e8eef3;
+  --secondary: #f1f5f9;
   --secondary-foreground: #0f2a43;
-  --muted: #e8eef3;
-  --muted-foreground: #5a6a7a;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
   --accent: #1f9b8e;
   --accent-foreground: #ffffff;
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.577 0.245 27.325);
-  --border: #d1dbe5;
-  --input: #d1dbe5;
+  --destructive: #ef4444;
+  --destructive-foreground: #fef2f2;
+  --border: #e2e8f0;
+  --input: #e2e8f0;
   --ring: #1f9b8e;
   --chart-1: #1f9b8e;
   --chart-2: #c79a3a;
   --chart-3: #0f2a43;
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --radius: 0.625rem;
-  --sidebar: #0f2a43;
-  --sidebar-foreground: #ffffff;
+  --chart-4: #8b5cf6;
+  --chart-5: #ec4899;
+  --radius: 0.75rem;
+  
+  /* Sidebar - deep navy with sophistication */
+  --sidebar: #0a1929;
+  --sidebar-foreground: #f1f5f9;
   --sidebar-primary: #1f9b8e;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #1a3a5c;
-  --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: #1a3a5c;
+  --sidebar-accent: #1e3a5f;
+  --sidebar-accent-foreground: #f1f5f9;
+  --sidebar-border: #1e3a5f;
   --sidebar-ring: #1f9b8e;
   
   /* Brand colors */
   --brand-navy: #0f2a43;
+  --brand-navy-light: #1e3a5f;
   --brand-teal: #1f9b8e;
+  --brand-teal-light: #2dd4bf;
   --brand-gold: #c79a3a;
-  --brand-ink: #16222e;
+  --brand-gold-light: #fbbf24;
+  --brand-ink: #0f172a;
+  
+  /* Shadows for depth */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.145 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.145 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.985 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.396 0.141 25.723);
-  --destructive-foreground: oklch(0.637 0.237 25.331);
-  --border: oklch(0.269 0 0);
-  --input: oklch(0.269 0 0);
-  --ring: oklch(0.439 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(0.269 0 0);
-  --sidebar-ring: oklch(0.439 0 0);
+  --background: #0a1929;
+  --foreground: #f1f5f9;
+  --card: #0f2a43;
+  --card-foreground: #f1f5f9;
+  --popover: #0f2a43;
+  --popover-foreground: #f1f5f9;
+  --primary: #1f9b8e;
+  --primary-foreground: #ffffff;
+  --secondary: #1e3a5f;
+  --secondary-foreground: #f1f5f9;
+  --muted: #1e3a5f;
+  --muted-foreground: #94a3b8;
+  --accent: #1f9b8e;
+  --accent-foreground: #ffffff;
+  --destructive: #ef4444;
+  --destructive-foreground: #fef2f2;
+  --border: #1e3a5f;
+  --input: #1e3a5f;
+  --ring: #1f9b8e;
+  --sidebar: #050d15;
+  --sidebar-foreground: #f1f5f9;
+  --sidebar-primary: #1f9b8e;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #0f2a43;
+  --sidebar-accent-foreground: #f1f5f9;
+  --sidebar-border: #1e3a5f;
+  --sidebar-ring: #1f9b8e;
 }
 
 @theme inline {
-  --font-sans: 'Inter', 'Inter Fallback', sans-serif;
-  --font-mono: 'Geist Mono', 'Geist Mono Fallback';
+  --font-sans: 'Inter', 'Inter Fallback', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Geist Mono', 'Geist Mono Fallback', ui-monospace, monospace;
   --color-brand-navy: var(--brand-navy);
+  --color-brand-navy-light: var(--brand-navy-light);
   --color-brand-teal: var(--brand-teal);
+  --color-brand-teal-light: var(--brand-teal-light);
   --color-brand-gold: var(--brand-gold);
+  --color-brand-gold-light: var(--brand-gold-light);
   --color-brand-ink: var(--brand-ink);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -130,6 +140,52 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+  }
+}
+
+/* Custom scrollbar for premium feel */
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--muted) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: var(--muted);
+    border-radius: 3px;
+  }
+  
+  /* Gradient utilities */
+  .gradient-teal {
+    background: linear-gradient(135deg, #1f9b8e 0%, #2dd4bf 100%);
+  }
+  .gradient-navy {
+    background: linear-gradient(135deg, #0a1929 0%, #0f2a43 100%);
+  }
+  .gradient-gold {
+    background: linear-gradient(135deg, #c79a3a 0%, #fbbf24 100%);
+  }
+  
+  /* Glass effect */
+  .glass {
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  
+  /* Subtle card shadow on hover */
+  .card-hover {
+    transition: all 0.2s ease;
+  }
+  .card-hover:hover {
+    box-shadow: 0 10px 40px -10px rgba(15, 42, 67, 0.15);
+    transform: translateY(-2px);
   }
 }

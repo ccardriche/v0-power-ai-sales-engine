@@ -3,7 +3,7 @@ import { KpiTile } from '@/components/kpi-tile'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { Users, GitBranch, CheckSquare, TrendingUp, Calendar, Star, Bot } from 'lucide-react'
+import { Users, GitBranch, CheckSquare, TrendingUp, Calendar, Star, Bot, ArrowRight, Sparkles } from 'lucide-react'
 import Link from 'next/link'
 import { formatDistanceToNow } from 'date-fns'
 
@@ -68,7 +68,7 @@ async function getRecentActivity(supabase: Awaited<ReturnType<typeof createClien
     .select('*')
     .eq('company_id', companyId)
     .order('created_at', { ascending: false })
-    .limit(20)
+    .limit(10)
   return data ?? []
 }
 
@@ -130,16 +130,19 @@ export default async function DashboardPage() {
   if (!companyId) {
     return (
       <div className="p-8">
-        <Card>
-          <CardContent className="p-6 text-center">
-            <p className="text-muted-foreground">Company not found. Please contact support.</p>
+        <Card className="border-0 shadow-lg">
+          <CardContent className="p-12 text-center">
+            <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
+              <Sparkles className="w-8 h-8 text-muted-foreground" />
+            </div>
+            <h3 className="text-lg font-semibold mb-2">Company not found</h3>
+            <p className="text-muted-foreground">Please contact support to set up your account.</p>
           </CardContent>
         </Card>
       </div>
     )
   }
 
-  // Fetch all data in parallel
   const [
     leadsThisWeek,
     activeEnrollments,
@@ -161,158 +164,184 @@ export default async function DashboardPage() {
   ])
 
   return (
-    <div className="p-8 space-y-8">
+    <div className="p-8 space-y-8 max-w-7xl mx-auto">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-brand-navy">Dashboard</h1>
-        <p className="text-muted-foreground mt-1">Welcome back. Here&apos;s what&apos;s happening with your outreach.</p>
+      <div className="flex items-end justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground tracking-tight">Dashboard</h1>
+          <p className="text-muted-foreground mt-1">Welcome back. Here&apos;s your outreach at a glance.</p>
+        </div>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="w-2 h-2 rounded-full bg-brand-teal animate-pulse" />
+          <span>Live data</span>
+        </div>
       </div>
 
       {/* KPI Row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
         <KpiTile
-          label="Leads scored this week"
+          label="Leads this week"
           value={leadsThisWeek}
           icon={Users}
+          accentColor="teal"
         />
         <KpiTile
           label="Active enrollments"
           value={activeEnrollments}
           icon={GitBranch}
+          accentColor="navy"
         />
         <KpiTile
           label="Pending approvals"
           value={pendingApprovals}
           icon={CheckSquare}
+          accentColor="gold"
         />
         <KpiTile
           label="Reply rate (30d)"
           value={`${replyRate}%`}
           icon={TrendingUp}
+          accentColor="teal"
+          trend={replyRate > 10 ? { value: 'Good', positive: true } : undefined}
         />
       </div>
 
       {/* Approved Content Ready */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-brand-teal" />
-            Approved content ready to schedule
-          </CardTitle>
-          <Link 
-            href="/approvals" 
-            className="text-sm text-brand-teal hover:text-brand-teal/80 font-medium"
-          >
-            View all →
-          </Link>
-        </CardHeader>
-        <CardContent>
-          {approvedContentCount > 0 ? (
-            <p className="text-3xl font-bold text-brand-navy">{approvedContentCount} posts</p>
-          ) : (
-            <p className="text-muted-foreground">No approved content waiting. Head to Approvals to review drafts.</p>
-          )}
+      <Card className="border-0 shadow-sm bg-gradient-to-r from-brand-teal/5 via-transparent to-brand-gold/5 overflow-hidden">
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-2xl gradient-teal flex items-center justify-center shadow-lg shadow-brand-teal/20">
+                <Calendar className="w-7 h-7 text-white" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+                  Ready to schedule
+                </p>
+                <p className="text-3xl font-bold text-foreground tracking-tight">
+                  {approvedContentCount} approved posts
+                </p>
+              </div>
+            </div>
+            <Link 
+              href="/approvals" 
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-teal text-white font-medium text-sm hover:bg-brand-teal/90 transition-colors shadow-lg shadow-brand-teal/20"
+            >
+              View all
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
         </CardContent>
       </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Activity */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Recent activity</CardTitle>
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg font-semibold">Recent activity</CardTitle>
           </CardHeader>
           <CardContent>
             {recentActivity.length > 0 ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Channel</TableHead>
-                    <TableHead>Action</TableHead>
-                    <TableHead>Mode</TableHead>
-                    <TableHead>Age</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {recentActivity.map((activity) => (
-                    <TableRow key={activity.id}>
-                      <TableCell>
-                        <Badge variant="secondary" className="bg-brand-teal/10 text-brand-teal">
-                          {activity.channel}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-sm">{activity.action}</TableCell>
-                      <TableCell>
-                        {activity.dry_run ? (
-                          <Badge variant="outline" className="text-brand-gold border-brand-gold">
-                            Dry run
-                          </Badge>
-                        ) : (
-                          <Badge variant="secondary">Live</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {formatDistanceToNow(new Date(activity.created_at), { addSuffix: true })}
-                      </TableCell>
+              <div className="rounded-xl border overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50 hover:bg-muted/50">
+                      <TableHead className="font-semibold">Channel</TableHead>
+                      <TableHead className="font-semibold">Action</TableHead>
+                      <TableHead className="font-semibold">Mode</TableHead>
+                      <TableHead className="font-semibold">Age</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : (
-              <div className="py-8 text-center">
-                <p className="text-muted-foreground">No activity yet. Run your first sequence to see results here.</p>
+                  </TableHeader>
+                  <TableBody>
+                    {recentActivity.map((activity) => (
+                      <TableRow key={activity.id} className="hover:bg-muted/30">
+                        <TableCell>
+                          <Badge variant="secondary" className="bg-brand-teal/10 text-brand-teal border-0 font-medium">
+                            {activity.channel}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm font-medium">{activity.action}</TableCell>
+                        <TableCell>
+                          {activity.dry_run ? (
+                            <Badge variant="outline" className="text-brand-gold border-brand-gold/30 bg-brand-gold/5">
+                              Dry run
+                            </Badge>
+                          ) : (
+                            <Badge className="bg-emerald-50 text-emerald-600 border-0">Live</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {formatDistanceToNow(new Date(activity.created_at), { addSuffix: true })}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
+            ) : (
+              <EmptyState 
+                icon={GitBranch}
+                title="No activity yet"
+                description="Run your first sequence to see results here."
+              />
             )}
           </CardContent>
         </Card>
 
         {/* Top Performing Themes */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg font-semibold flex items-center gap-2">
               <Star className="w-5 h-5 text-brand-gold" />
               Top performing themes
             </CardTitle>
           </CardHeader>
           <CardContent>
             {topThemes.length > 0 ? (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {topThemes.map((theme, index) => (
-                  <div key={theme.id} className="flex items-center justify-between">
+                  <div 
+                    key={theme.id} 
+                    className="flex items-center justify-between p-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors"
+                  >
                     <div className="flex items-center gap-3">
-                      <span className="w-6 h-6 rounded-full bg-brand-navy text-white text-xs flex items-center justify-center font-medium">
+                      <span className="w-8 h-8 rounded-lg bg-brand-navy text-white text-sm flex items-center justify-center font-bold">
                         {index + 1}
                       </span>
                       <span className="text-sm font-medium">
                         {theme.scope?.replace('rollup_theme:', '') ?? theme.metric}
                       </span>
                     </div>
-                    <span className="text-sm text-muted-foreground">
+                    <span className="text-sm text-muted-foreground font-medium">
                       {theme.engagements?.toLocaleString() ?? 0} engagements
                     </span>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="py-8 text-center">
-                <p className="text-muted-foreground">No theme data yet. As your campaigns run, we&apos;ll surface what&apos;s working.</p>
-              </div>
+              <EmptyState 
+                icon={Star}
+                title="No theme data yet"
+                description="As your campaigns run, we'll surface what's working."
+              />
             )}
           </CardContent>
         </Card>
       </div>
 
       {/* Agent Status Panel */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-lg flex items-center gap-2">
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="flex flex-row items-center justify-between pb-3">
+          <CardTitle className="text-lg font-semibold flex items-center gap-2">
             <Bot className="w-5 h-5 text-brand-teal" />
             Agent Status
           </CardTitle>
           <Link 
             href="/settings" 
-            className="text-sm text-brand-teal hover:text-brand-teal/80 font-medium"
+            className="inline-flex items-center gap-1 text-sm text-brand-teal hover:text-brand-teal/80 font-medium transition-colors"
           >
-            Manage agents →
+            Manage agents
+            <ArrowRight className="w-4 h-4" />
           </Link>
         </CardHeader>
         <CardContent>
@@ -320,14 +349,16 @@ export default async function DashboardPage() {
             {agentStatus.map((status) => (
               <div 
                 key={status.agent}
-                className="p-3 rounded-lg border bg-card"
+                className="p-4 rounded-xl border bg-card hover:bg-muted/30 transition-colors"
               >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm font-medium">{status.agent}</span>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-semibold capitalize">
+                    {status.agent.replace(/-/g, ' ')}
+                  </span>
                   {status.level && (
                     <Badge 
                       variant={status.level === 'error' ? 'destructive' : status.level === 'warn' ? 'outline' : 'secondary'}
-                      className={status.level === 'warn' ? 'text-brand-gold border-brand-gold' : ''}
+                      className={status.level === 'warn' ? 'text-brand-gold border-brand-gold/30 bg-brand-gold/5' : status.level === 'info' ? 'bg-brand-teal/10 text-brand-teal border-0' : ''}
                     >
                       {status.level}
                     </Badge>
@@ -340,7 +371,7 @@ export default async function DashboardPage() {
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">
                       {formatDistanceToNow(new Date(status.created_at), { addSuffix: true })}
-                      {status.dry_run && <span className="ml-1 text-brand-gold">(dry run)</span>}
+                      {status.dry_run && <span className="ml-1.5 text-brand-gold font-medium">(dry run)</span>}
                     </p>
                   </>
                 ) : (
@@ -351,6 +382,26 @@ export default async function DashboardPage() {
           </div>
         </CardContent>
       </Card>
+    </div>
+  )
+}
+
+function EmptyState({ 
+  icon: Icon, 
+  title, 
+  description 
+}: { 
+  icon: typeof GitBranch
+  title: string
+  description: string 
+}) {
+  return (
+    <div className="py-12 text-center">
+      <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
+        <Icon className="w-7 h-7 text-muted-foreground" />
+      </div>
+      <h3 className="text-sm font-semibold text-foreground mb-1">{title}</h3>
+      <p className="text-sm text-muted-foreground">{description}</p>
     </div>
   )
 }

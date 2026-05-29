@@ -63,7 +63,7 @@ export async function GET(req: Request) {
   ).join('\n')
 
   const system = buildSystemPrompt(company)
-  const user = `Based on these top-performing social posts, create 3 ad concepts:
+  const userPrompt = `Based on these top-performing social posts, create 3 ad concepts:
 
 Top Posts:
 ${topContent}
@@ -77,34 +77,37 @@ For each concept, return:
 
 Return ONLY JSON with key "concepts" containing an array of 3 concept objects.`
 
-  const g = await generateJSON({ system, user })
-  const concepts = Array.isArray(g.concepts) ? g.concepts : []
+  try {
+    const g = await generateJSON({ system, user: userPrompt })
+    const concepts = Array.isArray(g.concepts) ? g.concepts : []
 
-  if (concepts.length === 0) {
-    await logAgent(AGENT_NAME, 'warn', 'no_concepts', 'Claude returned no ad concepts')
-    return NextResponse.json({ ok: true, actions: 0 })
-  }
+    if (concepts.length === 0) {
+      await logAgent(AGENT_NAME, 'warn', 'no_concepts', 'Claude returned no ad concepts')
+      return NextResponse.json({ ok: true, actions: 0 })
+    }
 
-  // Create campaign with concepts
-  const { data: campaign } = await supabase
-    .from('campaigns')
-    .insert({
-      company_id: company.id,
-      name: `Ads Campaign - ${new Date().toISOString().split('T')[0]}`,
-      status: 'draft',
-      budget: 0, // Budget forced to 0
-      kpi_targets: {
-        type: 'ads',
-        concepts,
-        source_posts: scoredPosts.map(p => p.id),
-      },
-    })
-    .select()
-    .single()
+    // Create campaign with concepts
+    const { data: campaign, error: insertErr } = await supabase
+      .from('campaigns')
+      .insert({
+        company_id: company.id,
+        name: `Ads Campaign - ${new Date().toISOString().split('T')[0]}`,
+        status: 'draft',
+        budget: 0, // Budget forced to 0
+        kpi_targets: {
+          type: 'ads',
+          concepts,
+          source_posts: scoredPosts.map(p => p.id),
+        },
+      })
+      .select()
+      .single()
 
-  // Create approval record
-  if (campaign) {
-    await supabase.from('approvals').insert({
+    if (insertErr) throw insertErr
+    if (!campaign) throw new Error('No campaign returned')
+
+    // Create approval record
+    const { error: apprErr } = await supabase.from('approvals').insert({
       company_id: company.id,
       channel: 'ads',
       entity_type: 'campaign',
@@ -115,11 +118,16 @@ Return ONLY JSON with key "concepts" containing an array of 3 concept objects.`
       requested_by: AGENT_NAME,
       source: AGENT_NAME,
     })
-  }
+    if (apprErr) throw apprErr
 
-  await logAgent(AGENT_NAME, 'info', 'run', `Created ad campaign with ${concepts.length} concepts.`, { 
-    concepts: concepts.length,
-    campaign_id: campaign?.id,
-  })
-  return NextResponse.json({ ok: true, actions: 1, concepts: concepts.length })
+    await logAgent(AGENT_NAME, 'info', 'run', `Created ad campaign with ${concepts.length} concepts.`, { 
+      concepts: concepts.length,
+      campaign_id: campaign.id,
+    })
+    return NextResponse.json({ ok: true, actions: 1, concepts: concepts.length })
+  } catch (e) {
+    const msg = (e as Error).message
+    await logAgent(AGENT_NAME, 'error', 'failed', `Ads agent failed: ${msg}`)
+    return NextResponse.json({ ok: false, error: msg })
+  }
 }
