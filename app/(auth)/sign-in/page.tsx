@@ -95,18 +95,32 @@ export default function SignInPage() {
 
     try {
       const supabase = createClient()
-      const { error } = await supabase.auth.signUp({
+      
+      // Sign up with password
+      const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
-        options: {
-          emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL ?? 
-            `${window.location.origin}/callback`,
-        },
       })
 
-      if (error) throw error
-      setSuccessMessage(`We sent a confirmation email to ${email}. Click the link to activate your account.`)
-      setIsSuccess(true)
+      if (signUpError) throw signUpError
+      
+      // If signup successful and user is auto-confirmed (no email verification required),
+      // sign them in immediately
+      if (authData.user) {
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        })
+        
+        if (signInError) {
+          // If auto-signin fails, tell user to check email or try again
+          setSuccessMessage(`Account created! You can now sign in with your email and password.`)
+          setIsSuccess(true)
+        } else {
+          // Successfully signed in after signup
+          window.location.href = '/dashboard'
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.')
     } finally {
