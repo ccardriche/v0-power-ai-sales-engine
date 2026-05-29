@@ -1,0 +1,13 @@
+{
+  "crons": [
+    { "path": "/api/agents/social-generate", "schedule": "0 7 * * *" },
+    { "path": "/api/agents/social-schedule", "schedule": "0 8 * * *" },
+    { "path": "/api/agents/cold-email", "schedule": "0 9 * * *" },
+    { "path": "/api/agents/sms", "schedule": "0 10 * * *" },
+    { "path": "/api/agents/linkedin", "schedule": "0 11 * * *" },
+    { "path": "/api/agents/ads", "schedule": "0 9 * * 1" },
+    { "path": "/api/agents/crm-memory", "schedule": "0 * * * *" },
+    { "path": "/api/agents/analytics", "schedule": "0 6 * * *" },
+    { "path": "/api/agents/approval-reminders", "schedule": "*/30 * * * *" }
+  ]
+}
