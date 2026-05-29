@@ -38,10 +38,13 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, reason: 'no_company' })
   }
 
-  // Get high-scoring leads without sequence
+  // Get high-scoring leads with contact info via FK
   const { data: leads } = await supabase
     .from('leads')
-    .select('*, contacts(*)')
+    .select(`
+      *,
+      contacts:contact_id ( first_name, last_name, job_title, email, organization )
+    `)
     .eq('company_id', company.id)
     .eq('sequence_status', 'none')
     .gte('score', 60)
@@ -53,53 +56,52 @@ export async function GET(req: Request) {
   }
 
   const system = buildSystemPrompt(company)
-  const compliance = company.compliance_config || {}
+  const compliance = (company.compliance_config as Record<string, string>) || {}
   let actions = 0
+  const errors: string[] = []
 
   for (const lead of leads) {
-    const contact = lead.contacts
-    if (!contact?.email) continue
+    try {
+      const contact = lead.contacts as { first_name: string | null; last_name: string | null; job_title: string | null; email: string | null; organization: string | null } | null
+      if (!contact?.email) continue
 
-    const user = `Write a cold email for this lead:
-Name: ${contact.first_name ?? ''} ${contact.last_name ?? ''}
+      const fullName = [contact.first_name, contact.last_name].filter(Boolean).join(' ') || 'there'
+      const userPrompt = `Write a cold email for this lead:
+Name: ${fullName}
 Title: ${contact.job_title ?? 'Unknown'}
-Company: ${contact.organization ?? 'Unknown'}
+Organization: ${contact.organization ?? 'Unknown'}
 Lead Score: ${lead.score ?? 0}
 
 Return ONLY JSON with keys: subject (compelling, under 60 chars), body (3-4 short paragraphs, warm, mission-aligned), cta (single soft ask).`
 
-    const g = await generateJSON({ system, user })
-    
-    // Build email with compliance footer
-    const unsubscribeUrl = compliance.unsubscribe_url || 'https://poweraifunds.com/unsubscribe'
-    const address = compliance.physical_address || ''
-    const footer = `\n\n---\nUnsubscribe: ${unsubscribeUrl}\n${address}`
-    const fullBody = ((g.body as string) ?? '') + footer
+      const g = await generateJSON({ system, user: userPrompt })
+      
+      // Build email with compliance footer
+      const unsubscribeUrl = compliance.unsubscribe_url || 'https://poweraifunds.com/unsubscribe'
+      const address = compliance.physical_address || ''
+      const footer = `\n\n---\nUnsubscribe: ${unsubscribeUrl}\n${address}`
+      const fullBody = ((g.body as string) ?? '') + footer
 
-    // Insert outreach message
-    const { data: message } = await supabase
-      .from('outreach_messages')
-      .insert({
-        company_id: company.id,
-        lead_id: lead.id,
-        channel: 'email',
-        subject: (g.subject as string) ?? 'Quick question',
-        body: fullBody,
-        status: 'draft',
-        approval_status: 'pending_approval',
-      })
-      .select()
-      .single()
+      // Insert outreach message
+      const { data: message, error: insertErr } = await supabase
+        .from('outreach_messages')
+        .insert({
+          company_id: company.id,
+          lead_id: lead.id,
+          channel: 'email',
+          subject: (g.subject as string) ?? 'Quick question',
+          body: fullBody,
+          status: 'draft',
+          approval_status: 'pending_approval',
+        })
+        .select()
+        .single()
 
-    // Update lead status
-    await supabase
-      .from('leads')
-      .update({ sequence_status: 'queued' })
-      .eq('id', lead.id)
+      if (insertErr) throw insertErr
+      if (!message) throw new Error('No message returned')
 
-    // Create approval record
-    if (message) {
-      await supabase.from('approvals').insert({
+      // Create approval record
+      const { error: apprErr } = await supabase.from('approvals').insert({
         company_id: company.id,
         channel: 'email',
         entity_type: 'outreach_message',
@@ -110,11 +112,22 @@ Return ONLY JSON with keys: subject (compelling, under 60 chars), body (3-4 shor
         requested_by: AGENT_NAME,
         source: AGENT_NAME,
       })
-    }
+      if (apprErr) throw apprErr
 
-    actions++
+      // Update lead status
+      await supabase
+        .from('leads')
+        .update({ sequence_status: 'queued' })
+        .eq('id', lead.id)
+
+      actions++
+    } catch (e) {
+      const msg = (e as Error).message
+      errors.push(`lead ${lead.id}: ${msg}`)
+      await logAgent(AGENT_NAME, 'error', 'row_failed', `Lead ${lead.id} failed: ${msg}`)
+    }
   }
 
-  await logAgent(AGENT_NAME, 'info', 'run', `Drafted ${actions} cold emails.`, { actions })
-  return NextResponse.json({ ok: true, actions })
+  await logAgent(AGENT_NAME, errors.length ? 'warn' : 'info', 'run', `Drafted ${actions} cold emails (errors: ${errors.length})`, { actions, errors: errors.length })
+  return NextResponse.json({ ok: errors.length === 0, actions, errors: errors.length })
 }
