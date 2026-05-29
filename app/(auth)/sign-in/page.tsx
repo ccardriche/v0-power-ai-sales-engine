@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { confirmUserEmail } from './actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -104,22 +105,26 @@ export default function SignInPage() {
 
       if (signUpError) throw signUpError
       
-      // If signup successful and user is auto-confirmed (no email verification required),
-      // sign them in immediately
       if (authData.user) {
+        // Auto-confirm the user's email using server action (admin privilege)
+        const confirmResult = await confirmUserEmail(authData.user.id)
+        
+        if (!confirmResult.success) {
+          throw new Error('Failed to confirm email')
+        }
+
+        // Wait a moment then attempt to sign in
+        await new Promise(resolve => setTimeout(resolve, 500))
+        
         const { error: signInError } = await supabase.auth.signInWithPassword({
           email,
           password,
         })
         
-        if (signInError) {
-          // If auto-signin fails, tell user to check email or try again
-          setSuccessMessage(`Account created! You can now sign in with your email and password.`)
-          setIsSuccess(true)
-        } else {
-          // Successfully signed in after signup
-          window.location.href = '/dashboard'
-        }
+        if (signInError) throw signInError
+        
+        // Successfully signed in after signup
+        window.location.href = '/dashboard'
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.')
