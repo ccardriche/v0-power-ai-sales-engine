@@ -10,8 +10,55 @@ export interface Company {
   approved_ctas: string[] | null
   case_studies: string | null
   compliance_config: ComplianceConfig | null
+  // New comprehensive fields
+  industry: string | null
+  company_size: string | null
+  founding_year: number | null
+  location: string | null
+  products_services: ProductService[] | null
+  pricing_model: string | null
+  average_deal_size: string | null
+  sales_cycle_length: string | null
+  competitors: Competitor[] | null
+  unique_differentiators: string[] | null
+  pain_points_solved: string[] | null
+  objection_handling: ObjectionResponse[] | null
+  social_profiles: SocialProfiles | null
+  content_themes: string[] | null
+  communication_channels: string[] | null
+  timezone: string | null
+  email_signature: string | null
+  meeting_link: string | null
+  logo_url: string | null
   created_at: string
   updated_at: string
+}
+
+export interface ProductService {
+  name: string
+  description: string
+  price_range?: string
+  target_audience?: string
+}
+
+export interface Competitor {
+  name: string
+  website?: string
+  differentiator?: string
+}
+
+export interface ObjectionResponse {
+  objection: string
+  response: string
+}
+
+export interface SocialProfiles {
+  linkedin?: string
+  twitter?: string
+  facebook?: string
+  instagram?: string
+  youtube?: string
+  tiktok?: string
 }
 
 export interface ComplianceConfig {
